@@ -40,11 +40,12 @@ export function DeviceCard({ device }: DeviceCardProps) {
 
     // Edit form state
     const [editModel, setEditModel] = useState(device.model || "");
-    const [editTempHigh, setEditTempHigh] = useState<number | "">(device.temp_high ?? "");
     const [editTempLow, setEditTempLow] = useState<number | "">(device.temp_low ?? "");
-    const [editTempX, setEditTempX] = useState<number | "">(device.temp_x ?? "");
-    const [editHumidity, setEditHumidity] = useState<number | "">(device.humidity ?? "");
+    const [editTempHigh, setEditTempHigh] = useState<number | "">(device.temp_high ?? "");
     const [editHumidityTemp, setEditHumidityTemp] = useState<number | "">(device.humidity_temp ?? "");
+    const [editSensor1Offset, setEditSensor1Offset] = useState<number | "">(device.sensor1_offset ?? 0);
+    const [editSensor2Offset, setEditSensor2Offset] = useState<number | "">(device.sensor2_offset ?? 0);
+    const [editMotorMode, setEditMotorMode] = useState<number>(device.motor_mode ?? 0);
     const [editTimerSec, setEditTimerSec] = useState<number | "">(device.timer_sec ?? "");
 
     const handleDelete = async () => {
@@ -65,15 +66,32 @@ export function DeviceCard({ device }: DeviceCardProps) {
     const handleUpdate = async () => {
         setIsLoading(true);
         try {
+            // Save settings to database
             await api.put(`/devices/${device.id}`, {
                 model: editModel,
-                temp_high: editTempHigh === "" ? null : editTempHigh,
                 temp_low: editTempLow === "" ? null : editTempLow,
-                temp_x: editTempX === "" ? null : editTempX,
-                humidity: editHumidity === "" ? null : editHumidity,
+                temp_high: editTempHigh === "" ? null : editTempHigh,
                 humidity_temp: editHumidityTemp === "" ? null : editHumidityTemp,
+                sensor1_offset: editSensor1Offset === "" ? null : editSensor1Offset,
+                sensor2_offset: editSensor2Offset === "" ? null : editSensor2Offset,
+                motor_mode: editMotorMode,
                 timer_sec: editTimerSec === "" ? null : editTimerSec,
             });
+
+            // Send SET_CONFIG command to device via MQTT
+            await api.post(`/devices/${device.id}/cmd`, {
+                cmd: "SET_CONFIG",
+                params: {
+                    temp_low: editTempLow === "" ? null : editTempLow,
+                    temp_high: editTempHigh === "" ? null : editTempHigh,
+                    humidity_temp: editHumidityTemp === "" ? null : editHumidityTemp,
+                    sensor1_offset: editSensor1Offset === "" ? null : editSensor1Offset,
+                    sensor2_offset: editSensor2Offset === "" ? null : editSensor2Offset,
+                    motor_mode: editMotorMode,
+                    timer_sec: editTimerSec === "" ? null : editTimerSec,
+                }
+            });
+
             await queryClient.invalidateQueries({ queryKey: ['devices'] });
             router.refresh();
         } catch (error) {
@@ -120,9 +138,9 @@ export function DeviceCard({ device }: DeviceCardProps) {
                     <div className="flex flex-col p-3 rounded-xl bg-blue-50/50 border border-blue-100">
                         <div className="flex items-center gap-1.5 text-blue-500 mb-1">
                             <Droplets className="h-4 w-4" />
-                            <span className="text-[10px] font-bold uppercase tracking-wider">Humidity</span>
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Sensor 2</span>
                         </div>
-                        <span className="font-bold text-2xl text-slate-800">{telemetry.hum_pct?.toFixed(0) ?? "--"}<span className="text-sm text-slate-500 font-medium ml-0.5">%</span></span>
+                        <span className="font-bold text-2xl text-slate-800">{telemetry.hum_pct?.toFixed(1) ?? "--"}<span className="text-sm text-slate-500 font-medium ml-0.5">°F</span></span>
                     </div>
                 </div>
 
@@ -186,32 +204,68 @@ export function DeviceCard({ device }: DeviceCardProps) {
                             </div>
 
                             <div className="border-t pt-4">
-                                <h4 className="text-sm font-semibold mb-3">Incubator Configuration</h4>
+                                <h4 className="text-sm font-semibold mb-3 text-purple-600">Temperature Thresholds</h4>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="space-y-1">
-                                        <Label htmlFor="edit-temp-high" className="text-xs">Temp High (°F)</Label>
-                                        <Input id="edit-temp-high" type="number" step="0.1" value={editTempHigh} onChange={(e) => setEditTempHigh(e.target.value ? parseFloat(e.target.value) : "")} />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <Label htmlFor="edit-temp-low" className="text-xs">Temp Low (°F)</Label>
+                                        <Label htmlFor="edit-temp-low" className="text-xs">Low Threshold (°F)</Label>
                                         <Input id="edit-temp-low" type="number" step="0.1" value={editTempLow} onChange={(e) => setEditTempLow(e.target.value ? parseFloat(e.target.value) : "")} />
+                                        <p className="text-[10px] text-muted-foreground">Heaters ON below this</p>
                                     </div>
                                     <div className="space-y-1">
-                                        <Label htmlFor="edit-temp-x" className="text-xs">Temp X (°F)</Label>
-                                        <Input id="edit-temp-x" type="number" step="0.1" value={editTempX} onChange={(e) => setEditTempX(e.target.value ? parseFloat(e.target.value) : "")} />
+                                        <Label htmlFor="edit-temp-high" className="text-xs">High Threshold (°F)</Label>
+                                        <Input id="edit-temp-high" type="number" step="0.1" value={editTempHigh} onChange={(e) => setEditTempHigh(e.target.value ? parseFloat(e.target.value) : "")} />
+                                        <p className="text-[10px] text-muted-foreground">Heaters OFF above this</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="border-t pt-4">
+                                <h4 className="text-sm font-semibold mb-3 text-purple-600">Cooling Threshold</h4>
+                                <div className="space-y-1">
+                                    <Label htmlFor="edit-humidity-temp" className="text-xs">Sensor 2 Threshold (°F)</Label>
+                                    <Input id="edit-humidity-temp" type="number" step="0.1" value={editHumidityTemp} onChange={(e) => setEditHumidityTemp(e.target.value ? parseFloat(e.target.value) : "")} />
+                                    <p className="text-[10px] text-muted-foreground">Cooling ON above this</p>
+                                </div>
+                            </div>
+
+                            <div className="border-t pt-4">
+                                <h4 className="text-sm font-semibold mb-3 text-purple-600">Sensor Calibration</h4>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                        <Label htmlFor="edit-sensor1-offset" className="text-xs">Sensor 1 Offset</Label>
+                                        <Input id="edit-sensor1-offset" type="number" step="0.1" value={editSensor1Offset} onChange={(e) => setEditSensor1Offset(e.target.value ? parseFloat(e.target.value) : "")} />
+                                        <p className="text-[10px] text-muted-foreground">Add/subtract (°F)</p>
                                     </div>
                                     <div className="space-y-1">
-                                        <Label htmlFor="edit-humidity" className="text-xs">Humidity (%)</Label>
-                                        <Input id="edit-humidity" type="number" step="1" value={editHumidity} onChange={(e) => setEditHumidity(e.target.value ? parseFloat(e.target.value) : "")} />
+                                        <Label htmlFor="edit-sensor2-offset" className="text-xs">Sensor 2 Offset</Label>
+                                        <Input id="edit-sensor2-offset" type="number" step="0.1" value={editSensor2Offset} onChange={(e) => setEditSensor2Offset(e.target.value ? parseFloat(e.target.value) : "")} />
+                                        <p className="text-[10px] text-muted-foreground">Add/subtract (°F)</p>
                                     </div>
+                                </div>
+                            </div>
+
+                            <div className="border-t pt-4">
+                                <h4 className="text-sm font-semibold mb-3 text-purple-600">Motor Control</h4>
+                                <div className="space-y-3">
                                     <div className="space-y-1">
-                                        <Label htmlFor="edit-humidity-temp" className="text-xs">Humidity Temp (°F)</Label>
-                                        <Input id="edit-humidity-temp" type="number" step="0.1" value={editHumidityTemp} onChange={(e) => setEditHumidityTemp(e.target.value ? parseFloat(e.target.value) : "")} />
+                                        <Label htmlFor="edit-motor-mode" className="text-xs">Motor Mode</Label>
+                                        <select
+                                            id="edit-motor-mode"
+                                            className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
+                                            value={editMotorMode}
+                                            onChange={(e) => setEditMotorMode(parseInt(e.target.value))}
+                                        >
+                                            <option value={0}>Timer (Toggle ON/OFF)</option>
+                                            <option value={1}>Always ON</option>
+                                        </select>
                                     </div>
-                                    <div className="space-y-1">
-                                        <Label htmlFor="edit-timer" className="text-xs">Timer (seconds)</Label>
-                                        <Input id="edit-timer" type="number" step="1" value={editTimerSec} onChange={(e) => setEditTimerSec(e.target.value ? parseInt(e.target.value) : "")} />
-                                    </div>
+                                    {editMotorMode === 0 && (
+                                        <div className="space-y-1 bg-slate-50 p-3 rounded-lg">
+                                            <Label htmlFor="edit-timer" className="text-xs">Timer Interval (seconds)</Label>
+                                            <Input id="edit-timer" type="number" step="1" value={editTimerSec} onChange={(e) => setEditTimerSec(e.target.value ? parseInt(e.target.value) : "")} />
+                                            <p className="text-[10px] text-muted-foreground">Motor toggles every X seconds</p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

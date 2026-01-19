@@ -26,15 +26,15 @@ export function TelemetryChart({ data }: TelemetryChartProps) {
                 <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                     <XAxis dataKey="timeStr" minTickGap={30} fontSize={12} />
-                    <YAxis yAxisId="left" domain={['auto', 'auto']} fontSize={12} label={{ value: 'Temp (°C)', angle: -90, position: 'insideLeft' }} />
-                    <YAxis yAxisId="right" orientation="right" domain={[0, 100]} fontSize={12} label={{ value: 'Humidity (%)', angle: 90, position: 'insideRight' }} />
+                    <YAxis yAxisId="left" domain={['auto', 'auto']} fontSize={12} label={{ value: 'Sensor 1 (°F)', angle: -90, position: 'insideLeft' }} />
+                    <YAxis yAxisId="right" orientation="right" domain={['auto', 'auto']} fontSize={12} label={{ value: 'Sensor 2 (°F)', angle: 90, position: 'insideRight' }} />
                     <Tooltip
                         contentStyle={{ backgroundColor: 'var(--background)', borderColor: 'var(--border)' }}
                         itemStyle={{ color: 'var(--foreground)' }}
                     />
                     <Legend />
-                    <Line yAxisId="left" type="monotone" dataKey="temp_c" stroke="#ef4444" name="Temperature" dot={false} strokeWidth={2} />
-                    <Line yAxisId="right" type="monotone" dataKey="hum_pct" stroke="#3b82f6" name="Humidity" dot={false} strokeWidth={2} />
+                    <Line yAxisId="left" type="monotone" dataKey="temp_c" stroke="#ef4444" name="Sensor 1" dot={false} strokeWidth={2} />
+                    <Line yAxisId="right" type="monotone" dataKey="hum_pct" stroke="#3b82f6" name="Sensor 2" dot={false} strokeWidth={2} />
                 </LineChart>
             </ResponsiveContainer>
         </div>

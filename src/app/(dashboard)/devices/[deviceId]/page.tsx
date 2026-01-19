@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useAuth } from "@/hooks/use-auth";
 import { RotateCw, Power, Wind, Flame, RefreshCcw, Brain, AlertTriangle, CheckCircle, Lightbulb, Droplets } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 interface DeviceStats {
     max_temp_c?: number;
@@ -82,6 +83,27 @@ export default function DeviceDetailPage() {
     });
 
     const handleSendCmd = (cmd: string, params: any = {}) => {
+        // Optimistic Update: Immediately update UI state before server response
+        setRealtimeHistory(prev => {
+            if (prev.length === 0) return prev;
+
+            // Create a new telemetry point based on the last one
+            const latest = { ...prev[0] };
+            latest.ts = new Date().toISOString(); // Update timestamp
+
+            // Apply the command change
+            if (cmd === "PRIMARY_HEATER") latest.primary_heater = params.state;
+            else if (cmd === "SECONDARY_HEATER") latest.secondary_heater = params.state;
+            else if (cmd === "FAN") latest.fan = params.state;
+            else if (cmd === "SV_VALVE") latest.sv_valve = params.state;
+            else if (cmd === "DOOR_LIGHT") latest.door_light = params.state; // Legacy
+
+            // Prepend new state (Newest first)
+            const newData = [latest, ...prev];
+            if (newData.length > 200) newData.pop(); // Remove oldest
+            return newData;
+        });
+
         cmdMutation.mutate({ cmd, params });
     };
 
@@ -130,9 +152,9 @@ export default function DeviceDetailPage() {
     useEffect(() => {
         if (lastMessage && lastMessage.type === "telemetry" && lastMessage.device_id === deviceId) {
             setRealtimeHistory(prev => {
-                // Append new data, keeping last 200
-                const newData = [...prev, lastMessage.data];
-                if (newData.length > 200) newData.shift();
+                // Prepend new data (Newest first), keeping last 200
+                const newData = [lastMessage.data, ...prev];
+                if (newData.length > 200) newData.pop();
                 return newData;
             });
         }
@@ -171,10 +193,10 @@ export default function DeviceDetailPage() {
                 </Card>
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium">Humidity</CardTitle>
+                        <CardTitle className="text-sm font-medium">Sensor 2</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{current.hum_pct?.toFixed(1) ?? "--"}%</div>
+                        <div className="text-2xl font-bold">{current.hum_pct?.toFixed(1) ?? "--"}°F</div>
                     </CardContent>
                 </Card>
                 <Card>
@@ -272,12 +294,12 @@ export default function DeviceDetailPage() {
                         </div>
                     </CardContent>
                 </Card>
-                <Card className={current.door_light ? "border-yellow-200 bg-yellow-50" : ""}>
+                <Card className={current.fan ? "border-cyan-200 bg-cyan-50" : ""}>
                     <CardContent className="p-3 text-center">
-                        <Power className={`w-6 h-6 mx-auto mb-1 ${current.door_light ? "text-yellow-500" : "text-gray-300"}`} />
-                        <div className="text-xs font-medium">Door Light</div>
-                        <div className={`text-sm font-bold ${current.door_light ? "text-yellow-600" : "text-gray-400"}`}>
-                            {current.door_light ? "ON" : "OFF"}
+                        <Power className={`w-6 h-6 mx-auto mb-1 ${current.fan ? "text-cyan-500" : "text-gray-300"}`} />
+                        <div className="text-xs font-medium">Fan</div>
+                        <div className={`text-sm font-bold ${current.fan ? "text-cyan-600" : "text-gray-400"}`}>
+                            {current.fan ? "ON" : "OFF"}
                         </div>
                     </CardContent>
                 </Card>
@@ -298,35 +320,70 @@ export default function DeviceDetailPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                     {/* Main Actuator Controls */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <Button
-                            variant={current.primary_heater ? "default" : "outline"}
-                            className={current.primary_heater ? "bg-orange-500 hover:bg-orange-600" : ""}
-                            onClick={() => handleSendCmd("PRIMARY_HEATER", { state: !current.primary_heater })}
-                        >
-                            <Flame className="mr-2 h-4 w-4" /> Pri Heater {current.primary_heater ? "ON" : "OFF"}
-                        </Button>
-                        <Button
-                            variant={current.secondary_heater ? "default" : "outline"}
-                            className={current.secondary_heater ? "bg-orange-500 hover:bg-orange-600" : ""}
-                            onClick={() => handleSendCmd("SECONDARY_HEATER", { state: !current.secondary_heater })}
-                        >
-                            <Flame className="mr-2 h-4 w-4" /> Sec Heater {current.secondary_heater ? "ON" : "OFF"}
-                        </Button>
-                        <Button
-                            variant={current.door_light ? "default" : "outline"}
-                            className={current.door_light ? "bg-yellow-500 hover:bg-yellow-600" : ""}
-                            onClick={() => handleSendCmd("DOOR_LIGHT", { state: !current.door_light })}
-                        >
-                            <Lightbulb className="mr-2 h-4 w-4" /> Door Light {current.door_light ? "ON" : "OFF"}
-                        </Button>
-                        <Button
-                            variant={current.sv_valve ? "default" : "outline"}
-                            className={current.sv_valve ? "bg-purple-500 hover:bg-purple-600" : ""}
-                            onClick={() => handleSendCmd("SV_VALVE", { state: !current.sv_valve })}
-                        >
-                            <Droplets className="mr-2 h-4 w-4" /> SV Valve {current.sv_valve ? "ON" : "OFF"}
-                        </Button>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/5 transition-colors">
+                            <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-full ${current.primary_heater ? "bg-orange-100 text-orange-600" : "bg-gray-100 text-gray-500"}`}>
+                                    <Flame className="w-5 h-5" />
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="font-medium">Primary Heater</span>
+                                    <span className="text-xs text-muted-foreground">{current.primary_heater ? "Running" : "Stopped"}</span>
+                                </div>
+                            </div>
+                            <Switch
+                                checked={!!current.primary_heater}
+                                onCheckedChange={(c) => handleSendCmd("PRIMARY_HEATER", { state: c })}
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/5 transition-colors">
+                            <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-full ${current.secondary_heater ? "bg-orange-100 text-orange-600" : "bg-gray-100 text-gray-500"}`}>
+                                    <Flame className="w-5 h-5" />
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="font-medium">Secondary Heater</span>
+                                    <span className="text-xs text-muted-foreground">{current.secondary_heater ? "Running" : "Stopped"}</span>
+                                </div>
+                            </div>
+                            <Switch
+                                checked={!!current.secondary_heater}
+                                onCheckedChange={(c) => handleSendCmd("SECONDARY_HEATER", { state: c })}
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/5 transition-colors">
+                            <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-full ${current.fan ? "bg-cyan-100 text-cyan-600" : "bg-gray-100 text-gray-500"}`}>
+                                    <Wind className="w-5 h-5" />
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="font-medium">Fan</span>
+                                    <span className="text-xs text-muted-foreground">{current.fan ? "Active" : "Inactive"}</span>
+                                </div>
+                            </div>
+                            <Switch
+                                checked={!!current.fan}
+                                onCheckedChange={(c) => handleSendCmd("FAN", { state: c })}
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/5 transition-colors">
+                            <div className="flex items-center gap-3">
+                                <div className={`p-2 rounded-full ${current.sv_valve ? "bg-purple-100 text-purple-600" : "bg-gray-100 text-gray-500"}`}>
+                                    <Droplets className="w-5 h-5" />
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="font-medium">SV Valve</span>
+                                    <span className="text-xs text-muted-foreground">{current.sv_valve ? "Open" : "Closed"}</span>
+                                </div>
+                            </div>
+                            <Switch
+                                checked={!!current.sv_valve}
+                                onCheckedChange={(c) => handleSendCmd("SV_VALVE", { state: c })}
+                            />
+                        </div>
                     </div>
 
                     {/* Secondary Controls */}
@@ -370,18 +427,18 @@ export default function DeviceDetailPage() {
                 </Card>
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium">Max Humidity (24h)</CardTitle>
+                        <CardTitle className="text-sm font-medium">Max Sensor 2 (24h)</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{stats?.max_hum_pct?.toFixed(0) ?? "--"}%</div>
+                        <div className="text-2xl font-bold">{stats?.max_hum_pct?.toFixed(1) ?? "--"}°F</div>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium">Avg Humidity (24h)</CardTitle>
+                        <CardTitle className="text-sm font-medium">Avg Sensor 2 (24h)</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{stats?.avg_hum_pct?.toFixed(0) ?? "--"}%</div>
+                        <div className="text-2xl font-bold">{stats?.avg_hum_pct?.toFixed(1) ?? "--"}°F</div>
                     </CardContent>
                 </Card>
             </div >

@@ -14,17 +14,21 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import api from "@/lib/axios";
 
-// Schema with Device Type 3 Configuration Fields
+// Schema matching device settings
 const deviceSchema = z.object({
     device_id: z.string().min(3, "Device ID is required"),
     model: z.string().min(1, "Model is required"),
     firmware_version: z.string().optional(),
-    // Device Type 3 Configuration (temperatures in Fahrenheit)
-    temp_high: z.number().optional(),
+    // Temperature Thresholds
     temp_low: z.number().optional(),
-    temp_x: z.number().optional(),
-    humidity: z.number().min(0).max(100).optional(),
+    temp_high: z.number().optional(),
+    // Cooling Threshold
     humidity_temp: z.number().optional(),
+    // Sensor Calibration
+    sensor1_offset: z.number().optional(),
+    sensor2_offset: z.number().optional(),
+    // Motor Control
+    motor_mode: z.number().int().min(0).max(1).optional(),
     timer_sec: z.number().int().min(0).optional(),
 });
 
@@ -36,9 +40,14 @@ export default function NewDevicePage() {
     const farmId = params.farmId as string;
     const queryClient = useQueryClient();
 
-    const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<DeviceFormValues>({
+    const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm<DeviceFormValues>({
         resolver: zodResolver(deviceSchema),
+        defaultValues: {
+            motor_mode: 0,
+        }
     });
+
+    const motorMode = watch("motor_mode");
 
     const createDevice = useMutation({
         mutationFn: async (data: DeviceFormValues) => {
@@ -82,13 +91,14 @@ export default function NewDevicePage() {
                         {/* Basic Device Info */}
                         <div className="space-y-4">
                             <div className="space-y-2">
-                                <Label htmlFor="device_id">Device ID (Serial Number)</Label>
-                                <Input id="device_id" placeholder="e.g. SN-12345678" {...register("device_id")} />
+                                <Label htmlFor="device_id">Device ID (MAC Address)</Label>
+                                <Input id="device_id" placeholder="e.g. 48CA4336F070" {...register("device_id")} />
+                                <p className="text-xs text-muted-foreground">Found in device serial monitor output</p>
                                 {errors.device_id && <p className="text-sm text-red-500">{errors.device_id.message}</p>}
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="model">Model</Label>
-                                <Input id="model" placeholder="e.g. Incubator-Pro-X" {...register("model")} />
+                                <Input id="model" placeholder="e.g. Smart Incubator" {...register("model")} />
                                 {errors.model && <p className="text-sm text-red-500">{errors.model.message}</p>}
                             </div>
                             <div className="space-y-2">
@@ -97,70 +107,108 @@ export default function NewDevicePage() {
                             </div>
                         </div>
 
-                        {/* Device Type 3 Configuration */}
+                        {/* Temperature Thresholds */}
                         <div className="border-t pt-6">
-                            <h3 className="text-lg font-semibold mb-4">Incubator Configuration</h3>
+                            <h3 className="text-lg font-semibold mb-4 text-purple-600">Temperature Thresholds</h3>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="temp_high">Temp High (°F)</Label>
-                                    <Input
-                                        id="temp_high"
-                                        type="number"
-                                        step="0.1"
-                                        placeholder="e.g. 100.5"
-                                        {...register("temp_high", { valueAsNumber: true })}
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="temp_low">Temp Low (°F)</Label>
+                                    <Label htmlFor="temp_low">Low Threshold (°F)</Label>
                                     <Input
                                         id="temp_low"
                                         type="number"
                                         step="0.1"
-                                        placeholder="e.g. 99.0"
+                                        placeholder="e.g. 97"
                                         {...register("temp_low", { valueAsNumber: true })}
                                     />
+                                    <p className="text-xs text-muted-foreground">Both heaters ON below this</p>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="temp_x">Temp X (°F)</Label>
+                                    <Label htmlFor="temp_high">High Threshold (°F)</Label>
                                     <Input
-                                        id="temp_x"
+                                        id="temp_high"
                                         type="number"
                                         step="0.1"
-                                        placeholder="e.g. 99.5"
-                                        {...register("temp_x", { valueAsNumber: true })}
+                                        placeholder="e.g. 100"
+                                        {...register("temp_high", { valueAsNumber: true })}
                                     />
+                                    <p className="text-xs text-muted-foreground">Both heaters OFF above this</p>
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* Cooling Threshold */}
+                        <div className="border-t pt-6">
+                            <h3 className="text-lg font-semibold mb-4 text-purple-600">Cooling Threshold</h3>
+                            <div className="space-y-2">
+                                <Label htmlFor="humidity_temp">Sensor 2 Threshold (°F)</Label>
+                                <Input
+                                    id="humidity_temp"
+                                    type="number"
+                                    step="0.1"
+                                    placeholder="e.g. 86.6"
+                                    {...register("humidity_temp", { valueAsNumber: true })}
+                                />
+                                <p className="text-xs text-muted-foreground">Cooling ON above this</p>
+                            </div>
+                        </div>
+
+                        {/* Sensor Calibration */}
+                        <div className="border-t pt-6">
+                            <h3 className="text-lg font-semibold mb-4 text-purple-600">Sensor Calibration</h3>
+                            <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="humidity">Humidity (%)</Label>
+                                    <Label htmlFor="sensor1_offset">Sensor 1 Offset (Temperature)</Label>
                                     <Input
-                                        id="humidity"
-                                        type="number"
-                                        step="1"
-                                        placeholder="e.g. 65"
-                                        {...register("humidity", { valueAsNumber: true })}
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="humidity_temp">Humidity Temp (°F)</Label>
-                                    <Input
-                                        id="humidity_temp"
+                                        id="sensor1_offset"
                                         type="number"
                                         step="0.1"
-                                        placeholder="e.g. 85.0"
-                                        {...register("humidity_temp", { valueAsNumber: true })}
+                                        placeholder="0"
+                                        {...register("sensor1_offset", { valueAsNumber: true })}
                                     />
+                                    <p className="text-xs text-muted-foreground">Add/subtract from reading (°F)</p>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="timer_sec">Timer (seconds)</Label>
+                                    <Label htmlFor="sensor2_offset">Sensor 2 Offset (Humidity)</Label>
                                     <Input
-                                        id="timer_sec"
+                                        id="sensor2_offset"
                                         type="number"
-                                        step="1"
-                                        placeholder="e.g. 3600"
-                                        {...register("timer_sec", { valueAsNumber: true })}
+                                        step="0.1"
+                                        placeholder="0"
+                                        {...register("sensor2_offset", { valueAsNumber: true })}
                                     />
+                                    <p className="text-xs text-muted-foreground">Add/subtract from reading (°F)</p>
                                 </div>
+                            </div>
+                        </div>
+
+                        {/* Motor Control */}
+                        <div className="border-t pt-6">
+                            <h3 className="text-lg font-semibold mb-4 text-purple-600">Motor Control</h3>
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="motor_mode">Motor Mode</Label>
+                                    <select
+                                        id="motor_mode"
+                                        className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                                        {...register("motor_mode", { valueAsNumber: true })}
+                                    >
+                                        <option value={0}>Timer (Toggle ON/OFF)</option>
+                                        <option value={1}>Always ON</option>
+                                    </select>
+                                </div>
+                                {motorMode === 0 && (
+                                    <div className="space-y-2 bg-slate-50 p-4 rounded-lg">
+                                        <Label htmlFor="timer_sec">Timer Interval (seconds)</Label>
+                                        <Input
+                                            id="timer_sec"
+                                            type="number"
+                                            step="1"
+                                            placeholder="e.g. 120"
+                                            {...register("timer_sec", { valueAsNumber: true })}
+                                        />
+                                        <p className="text-xs text-muted-foreground">Motor will toggle ON/OFF every X seconds</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </CardContent>
@@ -177,4 +225,3 @@ export default function NewDevicePage() {
         </div>
     );
 }
-
